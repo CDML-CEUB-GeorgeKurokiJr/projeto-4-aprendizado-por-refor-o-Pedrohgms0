@@ -1,71 +1,119 @@
-# DCGAN para Geração de Faces no Dataset CelebA
+# DCGAN — CelebA Face Generation
 
-## Visão Geral
-Implementação de uma Deep Convolutional Generative Adversarial Network (DCGAN) em PyTorch para geração de imagens sintéticas de rostos. O modelo foi treinado utilizando um subconjunto de 20.000 imagens do dataset CelebA, com imagens redimensionadas para 64x64 pixels. O projeto inclui monitoramento quantitativo via Fréchet Inception Distance (FID) nativo, visualização de métricas de treinamento e geração de amostras finais.
+Implementation of a Deep Convolutional Generative Adversarial Network (DCGAN) for face image synthesis, trained on a curated subset of the CelebA dataset using PyTorch on Kaggle.
 
-## Principais Características
-- Arquitetura DCGAN original com estabilização via Batch Normalization e label smoothing
-- Cálculo nativo de FID para avaliação quantitativa contínua do gerador
-- DataLoader personalizado otimizado para estruturas de diretório planas
-- Visualização automática de perdas (Discriminador/Gerador) e curva de FID por época
-- Geração e exportação automática de amostras sintéticas ao final do treinamento
-- Otimizado para execução em GPU (compatível com Tesla T4)
+---
 
-## Arquitetura
-**Gerador**
-- Entrada: Vetor latente (100 dimensões, 1x1)
-- 4 camadas transpostas convolucionais (1024 → 512 → 256 → 128 → 3 canais)
-- Ativação: ReLU
-- Normalização: BatchNorm2d
-- Saída: Imagem 64x64 (Normalizada entre -1 e 1)
+## Results
 
-**Discriminador**
-- Entrada: Imagem 64x64
-- 4 camadas convolucionais (3 → 64 → 128 → 256 → 512 → 1 canal)
-- Ativação: LeakyReLU (negative_slope=0.2)
-- Normalização: BatchNorm2d
-- Saída: Probabilidade binária (Sigmoid)
+| Metric | Value |
+|--------|-------|
+| FID (100 epochs) | **13.72** |
+| Image resolution | 64 × 64 |
+| Training dataset | 20,000 images (curated) |
+| Hardware | Kaggle T4 GPU |
 
-**Otimização e Perda**
-- Otimizador: Adam (lr=2e-4, betas=(0.5, 0.999))
-- Função de perda: Binary Cross-Entropy com suavização de rótulos (real=0.9, fake=0.0)
-- Épocas: 100 | Batch Size: 128 | Dimensão Latente: 100
+---
 
-## Dataset
-- **Fonte:** `jessicali9530/celeba-dataset` (img_align_celeba)
-- **Quantidade:** 20.000 imagens
-- **Pré-processamento:** `CenterCrop(140) → Resize(64) → ToTensor → Normalize(mean=[0.5], std=[0.5])`
-- **Carregamento:** Dataset customizado (`CelebADataset`) para contornar a estrutura plana do dataset original do Kaggle
+## Architecture
 
-## Requisitos
-```text
-python >= 3.8
-torch >= 1.10.0
-torchvision >= 0.11.0
-matplotlib
-numpy
+Based on [Radford et al., 2015](https://arxiv.org/abs/1511.06434) with no structural modifications.
+
+### Generator
+Input: latent vector `z ~ N(0,1)` with dimension 100.
+
+```
+z (100, 1, 1)
+→ ConvTranspose2d → BN → ReLU   (1024, 4, 4)
+→ ConvTranspose2d → BN → ReLU   (512,  8, 8)
+→ ConvTranspose2d → BN → ReLU   (256, 16,16)
+→ ConvTranspose2d → BN → ReLU   (128, 32,32)
+→ ConvTranspose2d → Tanh         (3,  64,64)
 ```
 
-## Como Executar
-1. Clone o repositório e acesse o diretório do projeto.
-2. Instale as dependências:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Execute o notebook no ambiente local ou no Kaggle:
-   ```bash
-   jupyter notebook celeba-gan20k.ipynb
-   ```
-4. Certifique-se de que o dataset está disponível em `/kaggle/input/datasets/jessicali9530/celeba-dataset/img_align_celeba/img_align_celeba` ou ajuste a variável `BASE_DIR` conforme o caminho local.
-5. Execute as células sequencialmente. As métricas e as imagens geradas serão salvas automaticamente na pasta `./output_dcgan`.
+### Discriminator
+Input: RGB image 3 × 64 × 64.
 
-## Monitoramento e Resultados
-Durante o treinamento, o notebook gera e salva automaticamente:
-- `training_plot.png`: Curvas de perda do Discriminador e Gerador, junto com a evolução do FID por época
-- `real_samples.png`: Batch de imagens reais do dataset para referência
-- `final_generated.png`: 64 amostras geradas pelo gerador após 100 épocas
+```
+(3,  64,64) → Conv2d → LeakyReLU(0.2)          (64, 32,32)
+(64, 32,32) → Conv2d → BN → LeakyReLU(0.2)    (128, 16,16)
+(128,16,16) → Conv2d → BN → LeakyReLU(0.2)    (256,  8, 8)
+(256, 8, 8) → Conv2d → BN → LeakyReLU(0.2)    (512,  4, 4)
+(512, 4, 4) → Conv2d → Sigmoid                  (1,    1, 1)
+```
 
-O treinamento convergiu para um FID final aproximado de ~18-19, indicando boa qualidade de geração e estabilidade adversarial. Os logs de perda e FID são exportados em formato PNG para análise posterior.
+Weight initialization: `N(0, 0.02)` for Conv layers, `N(1, 0.02)` for BatchNorm.
 
-## Licença
-Este projeto é disponibilizado para fins educacionais e de pesquisa. Consulte os termos de uso do dataset CelebA original para restrições de uso comercial.
+---
+
+## Dataset
+
+- **Source:** [`jessicali9530/celeba-dataset`](https://www.kaggle.com/datasets/jessicali9530/celeba-dataset) on Kaggle
+- **Subset:** 20,000 images selected via manual curation (`curated_files.csv`)
+- **Rationale:** Curated subset focuses the generator on a narrower facial distribution, reducing mode coverage requirements and improving convergence on limited compute
+- **Preprocessing:** `CenterCrop(140)` → `Resize(64)` → `Normalize(mean=0.5, std=0.5)` (output range `[-1, 1]`)
+
+---
+
+## Training
+
+| Hyperparameter | Value |
+|----------------|-------|
+| Epochs | 100 |
+| Batch size | 128 |
+| Latent dimension | 100 |
+| Optimizer | Adam (β₁=0.5, β₂=0.999) |
+| Learning rate | 0.0002 |
+| Loss | Binary Cross-Entropy |
+| Label smoothing | Real labels = 0.9 (one-sided) |
+
+---
+
+## Evaluation — FID
+
+FID (Fréchet Inception Distance) is computed natively at every epoch using a pre-trained Inception V3 (`transform_input=False`).
+
+- **Real features:** extracted once from 5,000 curated images and kept fixed throughout training
+- **Fake features:** 5,000 generator samples per epoch, upsampled to 299 × 299 for Inception V3
+
+> Note: FID scores are internally consistent but not directly comparable to published benchmarks, which use ImageNet-normalized inputs to Inception V3.
+
+---
+
+## Repository Structure
+
+```
+celeba-gan20k.ipynb     # Main notebook (data loading → training → evaluation)
+output_dcgan/
+├── real_samples.png            # Grid of real images from the training set
+├── fake_epoch_{N}.png          # Generated samples saved every 5 epochs
+├── training_plot.png           # G loss, D loss, and FID over epochs
+├── final_generated.png         # 64-image grid from the final generator
+├── generator_epoch_{N}.pth     # Generator checkpoint every 10 epochs
+└── discriminator_epoch_{N}.pth # Discriminator checkpoint every 10 epochs
+```
+
+---
+
+## Requirements
+
+```
+torch
+torchvision
+numpy
+pandas
+matplotlib
+scipy
+tqdm
+Pillow
+```
+
+Tested on Python 3.12, PyTorch 2.x, Kaggle T4 environment.
+
+---
+
+## References
+
+- Radford, A., Metz, L., & Chintala, S. (2015). *Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks.* [arXiv:1511.06434](https://arxiv.org/abs/1511.06434)
+- Liu, Z., Luo, P., Wang, X., & Tang, X. (2015). *Deep Learning Face Attributes in the Wild.* [arXiv:1411.7766](https://arxiv.org/abs/1411.7766)
+- Heusel, M. et al. (2017). *GANs Trained by a Two Time-Scale Update Rule Converge to a Local Nash Equilibrium.* [arXiv:1706.08500](https://arxiv.org/abs/1706.08500) *(FID metric)*
